@@ -1,0 +1,85 @@
+name: Update Geo Files
+
+on:
+  schedule:
+    # Каждые 3 часа
+    - cron: "0 */3 * * *"
+
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+env:
+  GEOIP_URL: https://connect.vpnhub.shop/geo/geoip.dat
+  GEOSITE_URL: https://connect.vpnhub.shop/geo/geosite.dat
+
+jobs:
+  update:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Download geo files
+        run: |
+          mkdir -p downloaded
+
+          echo "Downloading geoip.dat..."
+          curl -fL "$GEOIP_URL" -o downloaded/geoip.dat
+
+          echo "Downloading geosite.dat..."
+          curl -fL "$GEOSITE_URL" -o downloaded/geosite.dat
+
+      - name: Compare files
+        id: compare
+        run: |
+          changed=false
+
+          compare() {
+            file=$1
+
+            if [ ! -f "$file" ]; then
+              echo "$file does not exist. Creating."
+
+              cp "downloaded/$file" "$file"
+              changed=true
+              return
+            fi
+
+            OLD=$(sha256sum "$file" | awk '{print $1}')
+            NEW=$(sha256sum "downloaded/$file" | awk '{print $1}')
+
+            if [ "$OLD" != "$NEW" ]; then
+              echo "$file changed."
+
+              cp "downloaded/$file" "$file"
+
+              changed=true
+            else
+              echo "$file is up to date."
+            fi
+          }
+
+          compare geoip.dat
+          compare geosite.dat
+
+          echo "changed=$changed" >> "$GITHUB_OUTPUT"
+
+      - name: Commit changes
+        if: steps.compare.outputs.changed == 'true'
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+
+          DATE=$(date -u +"%Y-%m-%d %H:%M UTC")
+
+          git add geoip.dat geosite.dat
+
+          git commit -m "Update geo files ($DATE)"
+
+      - name: Push
+        if: steps.compare.outputs.changed == 'true'
+        run: |
+          git push
