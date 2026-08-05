@@ -1,0 +1,60 @@
+name: Update Happ Subscription
+
+on:
+  schedule:
+    # каждые 3 часа
+    - cron: "30 */3 * * *"
+
+  workflow_dispatch:
+
+
+permissions:
+  contents: write
+
+
+jobs:
+  update:
+    runs-on: ubuntu-latest
+
+    timeout-minutes: 10
+
+
+    steps:
+
+      - name: Download subscription
+        run: |
+          curl \
+            --fail \
+            --location \
+            --max-time 120 \
+            "${{ secrets.VPN_SUB_URL }}" \
+            -o happ-subscription
+
+
+      - name: Validate file
+        run: |
+          echo "Subscription size:"
+          ls -lh happ-subscription
+
+          if [ ! -s happ-subscription ]; then
+            echo "Subscription is empty"
+            exit 1
+          fi
+
+
+      - name: Update release
+        uses: softprops/action-gh-release@v2
+
+        with:
+          tag_name: latest
+          name: Latest Happ Subscription
+
+          body: |
+            Automatically updated subscription.
+
+          files: |
+            happ-subscription
+
+
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
