@@ -19,7 +19,7 @@ jobs:
         run: |
           mkdir -p files
           
-          curl -fL "${{ secrets.VPN_SUB_URL }}" \
+          curl -fL --compressed "${{ secrets.VPN_SUB_URL }}" \
             -H "accept-language: ru-RU,en,*" \
             -H "accept-encoding: gzip, deflate" \
             -H "x-ver-os: 11_10.0.26200" \
