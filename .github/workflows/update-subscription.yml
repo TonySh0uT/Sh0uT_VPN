@@ -8,7 +8,6 @@ on:
 
 
 permissions:
-  contents: read
   pages: write
   id-token: write
 
@@ -16,36 +15,32 @@ permissions:
 jobs:
 
   build:
-
     runs-on: ubuntu-latest
 
     steps:
 
-      - name: Download subscription
+      - name: Download original subscription
         run: |
+          mkdir public
+
           curl \
             --fail \
             --location \
             --max-time 120 \
             "${{ secrets.VPN_SUB_URL }}" \
-            -o public_sub
+            -o public/sub
 
 
-      - name: Validate
+      - name: Check
         run: |
           echo "Size:"
-          wc -c public_sub
+          wc -c public/sub
 
-          head -c 50 public_sub
-
-
-      - name: Prepare Pages
-        run: |
-          mkdir public
-          cp public_sub public/happ-subscription
+          echo "First chars:"
+          head -c 100 public/sub
 
 
-      - name: Upload artifact
+      - name: Upload Pages
         uses: actions/upload-pages-artifact@v3
         with:
           path: public
