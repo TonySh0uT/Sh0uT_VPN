@@ -1,0 +1,65 @@
+{
+  "dns": {
+    "disableCache": false,
+    "enableParallelQuery": false,
+    "hosts": {
+      "common.dot.dns.yandex.net": ["77.88.8.1", "77.88.8.8"],
+      "dns.google": ["8.8.8.8", "8.8.4.4"]
+    },
+    "queryStrategy": "UseIPv4",
+    "servers": [
+      { "address": "https://dns.google/dns-query", "timeoutMs": 500 },
+      { "address": "https://dns.cloudflare.com/dns-query", "timeoutMs": 500 }
+    ],
+    "tag": "dns-in",
+    "useSystemHosts": false
+  },
+  "inbounds": [
+    {
+      "listen": "127.0.0.1", "port": 10808, "protocol": "socks",
+      "settings": { "auth": "noauth", "udp": true },
+      "tag": "socks"
+    }
+  ],
+  "observatory": {
+    "enableConcurrency": true,
+    "probeInterval": "30m",
+    "probeUrl": "http://cp.cloudflare.com/generate_204",
+    "subjectSelector": ["proxy-"]
+  },
+  "outbounds": [
+    { "protocol": "blackhole", "tag": "block" },
+    { "protocol": "freedom", "tag": "direct" },
+    {
+      "protocol": "freedom",
+      "settings": { "fragment": { "interval": "5-10", "length": "10-20", "packets": "tlshello" } },
+      "tag": "direct-fragment"
+    }
+  ],
+  "routing": {
+    "balancers": [
+      {
+        "fallbackTag": "proxy",
+        "selector": ["proxy-"],
+        "strategy": { "type": "leastPing" },
+        "tag": "Balancer"
+      }
+    ],
+    "domainMatcher": "hybrid",
+    "domainStrategy": "IPIfNonMatch",
+    "rules": [
+      { "balancerTag": "Balancer", "inboundTag": ["dns-in"], "ruleTag": "DNS to balancer" },
+      { "outboundTag": "direct", "port": "22,25", "ruleTag": "Direct danger ports" },
+      {
+        "domain": ["domain:yandex", "domain:vk.com"],
+        "outboundTag": "direct",
+        "ruleTag": "category-direct to direct"
+      },
+      {
+        "balancerTag": "Balancer",
+        "network": "tcp,udp",
+        "ruleTag": "All to Balancer"
+      }
+    ]
+  }
+}
