@@ -40,11 +40,11 @@ jobs:
       - name: Update release
         uses: softprops/action-gh-release@v2
         with:
-          tag_name: happ-sub
-          name: Latest Happ Subscription
-          body: |
-            Свежий список серверов vless.
-          files: files/sub
-          make_latest: true
+            tag_name: happ-sub
+            name: Latest Happ Subscription
+            body: |
+              Свежий список серверов vless.
+            files: files/sub
+            make_latest: false
         env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+            GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
