@@ -2,14 +2,13 @@ name: Update Happ Subscription
 
 on:
   schedule:
-    # каждые 3 часа
     - cron: "30 */3 * * *"
 
   workflow_dispatch:
 
 
 permissions:
-  contents: write
+  contents: read
   pages: write
   id-token: write
 
@@ -20,7 +19,6 @@ jobs:
 
     runs-on: ubuntu-latest
 
-
     steps:
 
       - name: Download subscription
@@ -30,33 +28,24 @@ jobs:
             --location \
             --max-time 120 \
             "${{ secrets.VPN_SUB_URL }}" \
-            -o subscription.base64
+            -o public_sub
 
 
-      - name: Decode subscription
+      - name: Validate
         run: |
-          base64 -d subscription.base64 > subscription.txt
+          echo "Size:"
+          wc -c public_sub
 
-
-      - name: Validate subscription
-        run: |
-          echo "Subscription preview:"
-          head -c 200 subscription.txt
-          echo
-
-          if ! grep -q "://" subscription.txt; then
-            echo "Invalid subscription format"
-            exit 1
-          fi
+          head -c 50 public_sub
 
 
       - name: Prepare Pages
         run: |
           mkdir public
-          cp subscription.txt public/happ-subscription
+          cp public_sub public/happ-subscription
 
 
-      - name: Upload Pages artifact
+      - name: Upload artifact
         uses: actions/upload-pages-artifact@v3
         with:
           path: public
@@ -69,17 +58,16 @@ jobs:
 
     runs-on: ubuntu-latest
 
-
-    environment:
-      name: github-pages
-
-
     permissions:
       pages: write
       id-token: write
 
 
+    environment:
+      name: github-pages
+
+
     steps:
 
-      - name: Deploy to GitHub Pages
+      - name: Deploy
         uses: actions/deploy-pages@v4
