@@ -2,6 +2,7 @@ name: Update Happ Subscription
 
 on:
   schedule:
+    # каждые 3 часа
     - cron: "30 */3 * * *"
 
   workflow_dispatch:
@@ -9,13 +10,15 @@ on:
 
 permissions:
   contents: write
+  pages: write
+  id-token: write
 
 
 jobs:
-  update:
-    runs-on: ubuntu-latest
 
-    timeout-minutes: 10
+  build:
+
+    runs-on: ubuntu-latest
 
 
     steps:
@@ -32,30 +35,51 @@ jobs:
 
       - name: Decode subscription
         run: |
-          base64 -d subscription.base64 > happ-subscription
+          base64 -d subscription.base64 > subscription.txt
 
 
-      - name: Validate
+      - name: Validate subscription
         run: |
-          echo "Result:"
-          head -c 100 happ-subscription
+          echo "Subscription preview:"
+          head -c 200 subscription.txt
           echo
 
-          if [ ! -s happ-subscription ]; then
-            echo "Empty subscription"
+          if ! grep -q "://" subscription.txt; then
+            echo "Invalid subscription format"
             exit 1
           fi
 
 
-      - name: Update release
-        uses: softprops/action-gh-release@v2
+      - name: Prepare Pages
+        run: |
+          mkdir public
+          cp subscription.txt public/happ-subscription
 
+
+      - name: Upload Pages artifact
+        uses: actions/upload-pages-artifact@v3
         with:
-          tag_name: latest
-          name: Latest Happ Subscription
+          path: public
 
-          files: |
-            happ-subscription
 
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+  deploy:
+
+    needs: build
+
+    runs-on: ubuntu-latest
+
+
+    environment:
+      name: github-pages
+
+
+    permissions:
+      pages: write
+      id-token: write
+
+
+    steps:
+
+      - name: Deploy to GitHub Pages
+        uses: actions/deploy-pages@v4
