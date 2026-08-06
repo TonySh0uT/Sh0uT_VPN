@@ -39,7 +39,6 @@ jobs:
           body: |
             Обновлены версии подписок для сравнения.
           files: |
-            files/sub
             files/external_sub
           make_latest: false
         env:
