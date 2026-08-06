@@ -2,7 +2,6 @@ name: Update Happ Subscription
 
 on:
   schedule:
-    # каждые 3 часа
     - cron: "30 */3 * * *"
 
   workflow_dispatch:
@@ -28,16 +27,22 @@ jobs:
             --location \
             --max-time 120 \
             "${{ secrets.VPN_SUB_URL }}" \
-            -o happ-subscription
+            -o subscription.base64
 
 
-      - name: Validate file
+      - name: Decode subscription
         run: |
-          echo "Subscription size:"
-          ls -lh happ-subscription
+          base64 -d subscription.base64 > happ-subscription
+
+
+      - name: Validate
+        run: |
+          echo "Result:"
+          head -c 100 happ-subscription
+          echo
 
           if [ ! -s happ-subscription ]; then
-            echo "Subscription is empty"
+            echo "Empty subscription"
             exit 1
           fi
 
@@ -49,12 +54,8 @@ jobs:
           tag_name: latest
           name: Latest Happ Subscription
 
-          body: |
-            Automatically updated subscription.
-
           files: |
             happ-subscription
-
 
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
