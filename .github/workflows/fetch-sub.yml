@@ -1,0 +1,46 @@
+name: Fetch External Subscription
+
+on:
+  schedule:
+    - cron: "0 */3 * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  fetch:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Download external subscription
+        run: |
+          mkdir -p files
+          
+          curl -fL "${{ secrets.VPN_SUB_URL }}" \
+            -H "accept-language: ru-RU,en,*" \
+            -H "accept-encoding: gzip, deflate" \
+            -H "x-ver-os: 11_10.0.26200" \
+            -H "x-hwid: 11111" \
+            -H "x-device-model: DESKTOP" \
+            -H "x-device-os: Windows" \
+            -H "x-device-locale: RU" \
+            -H "x-app-version: 3.3.6" \
+            -H "user-agent: Happ/3.3.6/Windows/1" \
+            -o files/external_sub
+
+      - name: Update release with both files
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: happ-sub
+          name: Latest Happ Subscription
+          body: |
+            Обновлены версии подписок для сравнения.
+          files: |
+            files/sub
+            files/external_sub
+          make_latest: false
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
