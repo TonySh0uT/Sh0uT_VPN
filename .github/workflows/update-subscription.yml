@@ -10,17 +10,16 @@ on:
       - 'build.py'
       - '.github/workflows/update-subscription.yml'
 
-
   schedule:
     - cron: "30 */3 * * *"
+
   workflow_dispatch:
 
 permissions:
-  pages: write
-  id-token: write
+  contents: write # Обязательное право для создания релизов
 
 jobs:
-  build:
+  build-and-release:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout repository
@@ -34,16 +33,19 @@ jobs:
       - name: Run Build Script
         run: python build.py
 
-      - name: Upload Pages
-        uses: actions/upload-pages-artifact@v3
-        with:
-          path: public
+      - name: Check output file
+        run: |
+          echo "Size of sub file:"
+          wc -c files/sub
 
-  deploy:
-    needs: build
-    runs-on: ubuntu-latest
-    environment:
-      name: github-pages
-    steps:
-      - name: Deploy
-        uses: actions/deploy-pages@v4
+      - name: Update release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: happ-sub
+          name: Latest Happ Subscription
+          body: |
+            Automatically updated Happ subscription.
+          files: files/sub
+          make_latest: true
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

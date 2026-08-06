@@ -56,8 +56,8 @@ json_str = json.dumps(config, separators=(',', ':'))
 b64_str = base64.b64encode(json_str.encode('utf-8')).decode('utf-8')
 
 # 6. Сохраняем результат
-os.makedirs('public', exist_ok=True)
-with open('public/sub', 'w', encoding='utf-8') as f:
+os.makedirs('files', exist_ok=True)
+with open('files/sub', 'w', encoding='utf-8') as f:
     f.write(b64_str)
 
 print(f"Сборка завершена. Успешно извлечено и добавлено серверов: {len(servers)}")
