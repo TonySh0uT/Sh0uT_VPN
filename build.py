@@ -1,63 +1,80 @@
 import json
 import os
 import base64
+import urllib.parse
 
-# 1. Читаем базовый шаблон
-with open('template.json', 'r', encoding='utf-8') as f:
-    config = json.load(f)
-
-servers = []
-proxy_counter = 1
 servers_dir = 'servers'
+vless_links = []
+proxy_counter = 1
 
-# 2. Умный поиск серверов
 if os.path.exists(servers_dir):
     for filename in os.listdir(servers_dir):
         if filename.endswith('.json'):
             with open(os.path.join(servers_dir, filename), 'r', encoding='utf-8') as f:
-                data = json.load(f)
+                try:
+                    data = json.load(f)
 
-                items_to_process = []
+                    # Поддержка разных форматов (один сервер, массив или выгрузка из outbounds)
+                    items_to_process = []
+                    if isinstance(data, dict) and 'outbounds' in data:
+                        items_to_process = data['outbounds']
+                    elif isinstance(data, list):
+                        items_to_process = data
+                    else:
+                        items_to_process = [data]
 
-                # Если это полный конфиг (как happ.txt), берем только массив outbounds
-                if isinstance(data, dict) and 'outbounds' in data:
-                    items_to_process = data['outbounds']
-                # Если это массив серверов
-                elif isinstance(data, list):
-                    items_to_process = data
-                # Если это одиночный сервер
-                else:
-                    items_to_process = [data]
+                    for item in items_to_process:
+                        if item.get('protocol') != 'vless':
+                            continue
 
-                for item in items_to_process:
-                    # Пропускаем технические подключения (direct, block, dns), берем только прокси
-                    protocol = item.get('protocol', '')
-                    if protocol in ['freedom', 'blackhole', 'dns']:
-                        continue
+                        # Извлекаем базовые данные
+                        vnext = item['settings']['vnext'][0]
+                        address = vnext['address']
+                        port = vnext['port']
+                        user_id = vnext['users'][0]['id']
 
-                    # Прописываем правильный тег для балансировщика
-                    item['tag'] = f"proxy-{proxy_counter}"
-                    servers.append(item)
-                    proxy_counter += 1
+                        # Извлекаем настройки сети
+                        stream = item.get('streamSettings', {})
+                        network = stream.get('network', 'tcp')
+                        security = stream.get('security', 'none')
 
-# 3. Вставляем найденные серверы в начало блока outbounds шаблона
-if 'outbounds' not in config:
-    config['outbounds'] = []
-config['outbounds'] = servers + config['outbounds']
+                        query_params = [f"type={network}", f"security={security}", "encryption=none"]
 
-# 4. Обновляем fallbackTag у балансировщика на первый доступный сервер
-if servers and 'routing' in config and 'balancers' in config['routing']:
-    for b in config['routing']['balancers']:
-        if b.get('tag') == 'Balancer':
-            b['fallbackTag'] = 'proxy-1'
+                        # Настройки TLS
+                        if security == 'tls':
+                            tls = stream.get('tlsSettings', {})
+                            if tls.get('serverName'):
+                                query_params.append(f"sni={tls['serverName']}")
+                            if tls.get('fingerprint'):
+                                query_params.append(f"fp={tls['fingerprint']}")
+                            if tls.get('alpn'):
+                                query_params.append(f"alpn={urllib.parse.quote(','.join(tls['alpn']), safe='')}")
 
-# 5. Собираем и кодируем
-json_str = json.dumps(config, separators=(',', ':'))
-b64_str = base64.b64encode(json_str.encode('utf-8')).decode('utf-8')
+                        # Настройки WebSocket
+                        if network == 'ws':
+                            ws = stream.get('wsSettings', {})
+                            if ws.get('host'):
+                                query_params.append(f"host={ws['host']}")
+                            if ws.get('path'):
+                                query_params.append(f"path={urllib.parse.quote(ws['path'], safe='')}")
 
-# 6. Сохраняем результат
+                        # Формируем итоговую ссылку
+                        remark = f"Server-{proxy_counter} ({filename.replace('.json', '')})"
+                        query_string = "&".join(query_params)
+                        link = f"vless://{user_id}@{address}:{port}?{query_string}#{urllib.parse.quote(remark)}"
+
+                        vless_links.append(link)
+                        proxy_counter += 1
+
+                except Exception as e:
+                    print(f"Ошибка при обработке файла {filename}: {e}")
+
+# Сохраняем результат в Base64
 os.makedirs('files', exist_ok=True)
-with open('files/sub', 'w', encoding='utf-8') as f:
-    f.write(b64_str)
+links_str = "\n".join(vless_links)
+b64_links = base64.b64encode(links_str.encode('utf-8')).decode('utf-8')
 
-print(f"Сборка завершена. Успешно извлечено и добавлено серверов: {len(servers)}")
+with open('files/sub', 'w', encoding='utf-8') as f:
+    f.write(b64_links)
+
+print(f"Сборка завершена! Сгенерировано ссылок VLESS: {len(vless_links)}")

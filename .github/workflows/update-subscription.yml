@@ -6,7 +6,6 @@ on:
       - main
     paths:
       - 'servers/**'
-      - 'template.json'
       - 'build.py'
       - '.github/workflows/update-subscription.yml'
 
@@ -16,7 +15,7 @@ on:
   workflow_dispatch:
 
 permissions:
-  contents: write # Обязательное право для создания релизов
+  contents: write
 
 jobs:
   build-and-release:
@@ -44,7 +43,7 @@ jobs:
           tag_name: happ-sub
           name: Latest Happ Subscription
           body: |
-            Automatically updated Happ subscription.
+            Свежий список серверов vless.
           files: files/sub
           make_latest: true
         env:
