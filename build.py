@@ -7,7 +7,11 @@ servers_dir = 'servers'
 vless_links = []
 
 if os.path.exists(servers_dir):
-    for filename in os.listdir(servers_dir):
+    # СОРТИРОВКА: получаем список файлов и сортируем их по алфавиту без учета регистра.
+    # Латиница автоматически встанет перед кириллицей благодаря стандартам Unicode.
+    filenames = sorted(os.listdir(servers_dir), key=lambda x: x.lower())
+
+    for filename in filenames:
         if filename.endswith('.json'):
             with open(os.path.join(servers_dir, filename), 'r', encoding='utf-8') as f:
                 try:
@@ -21,12 +25,12 @@ if os.path.exists(servers_dir):
                     else:
                         items_to_process = [data]
 
-                    # ИЩЕМ ТОЛЬКО ПЕРВЫЙ VLESS СЕРВЕР В ФАЙЛЕ
+                    # Ищем только первый VLESS сервер в файле
                     first_vless = None
                     for item in items_to_process:
                         if item.get('protocol') == 'vless':
                             first_vless = item
-                            break # Нашли первый - останавливаем поиск
+                            break
 
                     if first_vless:
                         vnext = first_vless['settings']['vnext'][0]
@@ -56,7 +60,7 @@ if os.path.exists(servers_dir):
                             if ws.get('path'):
                                 query_params.append(f"path={urllib.parse.quote(ws['path'], safe='')}")
 
-                        # Называем сервер именем файла (например: server_germany)
+                        # Называем сервер именем файла
                         server_name = filename.replace('.json', '')
                         query_string = "&".join(query_params)
                         link = f"vless://{user_id}@{address}:{port}?{query_string}#{urllib.parse.quote(server_name)}"
