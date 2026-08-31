@@ -8,24 +8,56 @@ from urllib.parse import parse_qs, unquote
 
 
 def decode_base64(data: str) -> str:
-    """Decode standard or URL-safe Base64."""
+    """
+    Decode standard or URL-safe Base64.
 
+    The source may contain:
+    - spaces/newlines
+    - BOM
+    - accidental Unicode characters
+    """
+
+    # Remove all whitespace.
     data = re.sub(r"\s+", "", data.strip())
+
+    # Base64 itself may contain only ASCII characters.
+    # Remove anything that cannot belong to Base64.
+    data = re.sub(
+        r"[^A-Za-z0-9+/=_-]",
+        "",
+        data
+    )
+
+    # Try standard Base64.
     padding = "=" * (-len(data) % 4)
 
     try:
-        return base64.b64decode(
-            data + padding
-        ).decode("utf-8")
+        decoded = base64.b64decode(
+            data + padding,
+            validate=False
+        )
+
+        return decoded.decode(
+            "utf-8"
+        )
+
     except Exception:
-        try:
-            return base64.urlsafe_b64decode(
-                data + padding
-            ).decode("utf-8")
-        except Exception as exc:
-            raise RuntimeError(
-                f"Не удалось декодировать VPN1: {exc}"
-            )
+        pass
+
+    # Try URL-safe Base64.
+    try:
+        decoded = base64.urlsafe_b64decode(
+            data + padding
+        )
+
+        return decoded.decode(
+            "utf-8"
+        )
+
+    except Exception as exc:
+        raise RuntimeError(
+            f"Не удалось декодировать VPN1: {exc}"
+        )
 
 
 def parse_vless_uri(uri: str, index: int) -> dict:
