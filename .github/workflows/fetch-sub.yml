@@ -11,6 +11,7 @@ permissions:
 jobs:
   fetch:
     runs-on: ubuntu-latest
+
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
@@ -18,26 +19,29 @@ jobs:
       - name: Download external subscription
         run: |
           mkdir -p files
-          
-          curl -fL --compressed "${{ secrets.VPN_SUB_URL_2 }}" \
+
+          curl -fL --compressed \
+            -c cookies.txt \
+            -b cookies.txt \
+            "${{ secrets.VPN_SUB_URL_2 }}" \
             -H "accept-language: ru-RU,en,*" \
             -H "accept-encoding: gzip, deflate" \
             -H "x-ver-os: 11_10.0.26200" \
-            -H "x-hwid: 11111" \
+            -H "x-hwid: ${{ secrets.HAPP_HWID }}" \
             -H "x-device-model: DESKTOP" \
             -H "x-device-os: Windows" \
             -H "x-device-locale: RU" \
             -H "x-app-version: 3.3.6" \
-            -H "user-agent: Happ/3.3.6/Windows/1" \
+            -H "user-agent: Happ/3.3.6/Windows/21111111111" \
             -o files/external_sub
 
-      - name: Update release with both files
+      - name: Update release with subscription
         uses: softprops/action-gh-release@v2
         with:
           tag_name: happ-sub
           name: Latest Happ Subscription
           body: |
-            Обновлены версии подписок для сравнения.
+            Обновлена подписка Happ.
           files: |
             files/external_sub
           make_latest: false
