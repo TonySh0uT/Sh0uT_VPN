@@ -16,13 +16,15 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
 
-      - name: Download external subscription
+      - name: Prepare directories
         run: |
           mkdir -p files
 
+      - name: Download VPN1
+        run: |
           curl -fL --compressed \
-            -c cookies.txt \
-            -b cookies.txt \
+            -c files/cookies1.txt \
+            -b files/cookies1.txt \
             "${{ secrets.VPN_SUB_URL }}" \
             -H "accept-language: ru-RU,en,*" \
             -H "accept-encoding: gzip, deflate" \
@@ -33,17 +35,128 @@ jobs:
             -H "x-device-locale: RU" \
             -H "x-app-version: 3.3.6" \
             -H "user-agent: Happ/3.3.6/Windows/21111111111" \
-            -o files/external_sub
+            -o files/vpn1
+
+      - name: Download VPN2
+        run: |
+          curl -fL --compressed \
+            -c files/cookies2.txt \
+            -b files/cookies2.txt \
+            "${{ secrets.VPN_SUB_URL_2 }}" \
+            -H "accept-language: ru-RU,en,*" \
+            -H "accept-encoding: gzip, deflate" \
+            -H "x-ver-os: 11_10.0.26200" \
+            -H "x-hwid: ${{ secrets.HAPP_HWID }}" \
+            -H "x-device-model: DESKTOP" \
+            -H "x-device-os: Windows" \
+            -H "x-device-locale: RU" \
+            -H "x-app-version: 3.3.6" \
+            -H "user-agent: Happ/3.3.6/Windows/21111111111" \
+            -o files/vpn2
+
+      - name: Merge subscriptions
+        env:
+          SOURCE1_FILE: files/vpn1
+          SOURCE2_FILE: files/vpn2
+          OUTPUT_FILE: files/external_sub
+        run: |
+          python3 merge_subscriptions.py
+
+      - name: Validate final subscription
+        run: |
+          python3 - <<'PY'
+          import json
+          import sys
+
+          with open(
+              "files/external_sub",
+              "r",
+              encoding="utf-8"
+          ) as f:
+              data = json.load(f)
+
+          profiles = (
+              data
+              if isinstance(data, list)
+              else [data]
+          )
+
+          total_vpn1 = 0
+          total_vpn2 = 0
+
+          for profile in profiles:
+
+              for outbound in profile.get(
+                  "outbounds",
+                  []
+              ):
+
+                  if not isinstance(
+                      outbound,
+                      dict
+                  ):
+                      continue
+
+                  tag = str(
+                      outbound.get(
+                          "tag",
+                          ""
+                      )
+                  )
+
+                  if tag.startswith(
+                      "VPN1 | "
+                  ):
+                      total_vpn1 += 1
+
+                  elif tag.startswith(
+                      "proxy-"
+                  ):
+                      total_vpn2 += 1
+
+          print(
+              f"Profiles: {len(profiles)}"
+          )
+
+          print(
+              f"VPN1 nodes: {total_vpn1}"
+          )
+
+          print(
+              f"VPN2 nodes: {total_vpn2}"
+          )
+
+          if total_vpn1 == 0:
+              print(
+                  "ERROR: "
+                  "VPN1 nodes were not added",
+                  file=sys.stderr
+              )
+              sys.exit(1)
+
+          if total_vpn2 == 0:
+              print(
+                  "ERROR: "
+                  "VPN2 nodes were not found",
+                  file=sys.stderr
+              )
+              sys.exit(1)
+
+          print(
+              "Validation OK"
+          )
+          PY
 
       - name: Update release with subscription
-        uses: softprops/action-gh-release@v2
+        uses: softprops/action-gh-release@v3
         with:
           tag_name: happ-sub
           name: Latest Happ Subscription
           body: |
-            Обновлена подписка Happ.
+            Автоматически обновляемая подписка.
           files: |
             files/external_sub
+          overwrite_files: true
           make_latest: false
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
