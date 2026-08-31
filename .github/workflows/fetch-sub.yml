@@ -35,7 +35,7 @@ jobs:
             -H "x-device-locale: RU" \
             -H "x-app-version: 3.3.6" \
             -H "user-agent: Happ/3.3.6/Windows/21111111111" \
-            -o files/vpn2
+            -o files/vpn1
 
       - name: Download VPN2
         run: |
@@ -52,55 +52,12 @@ jobs:
             -H "x-device-locale: RU" \
             -H "x-app-version: 3.3.6" \
             -H "user-agent: Happ/3.3.6/Windows/21111111111" \
-            -o files/vpn1
+            -o files/vpn2
 
-      - name: Debug VPN1 file
-        run: |
-          echo "=== FILE INFO ==="
-          wc -c files/vpn1
-          file files/vpn1
-
-          echo
-          echo "=== FIRST 100 BYTES ==="
-          xxd -l 100 files/vpn1
-
-          echo
-          echo "=== BYTES AROUND POSITION 64768 ==="
-          dd if=files/vpn1 bs=1 skip=64740 count=80 2>/dev/null | xxd
-
-          echo
-          echo "=== PYTHON CHARACTER INFO ==="
-          python3 - <<'PY'
-          from pathlib import Path
-
-          data = Path("files/vpn1").read_text(
-              encoding="utf-8"
-          )
-
-          start = 64740
-          end = 64810
-
-          print(f"Length: {len(data)}")
-          print(f"Characters [{start}:{end}]:")
-          print(repr(data[start:end]))
-
-          print()
-          print("Unicode code points:")
-
-          for i, char in enumerate(
-              data[start:end],
-              start=start
-          ):
-              print(
-                  f"{i}: "
-                  f"{char!r} "
-                  f"U+{ord(char):04X}"
-              )
-          PY
       - name: Merge subscriptions
         env:
-          SOURCE1_FILE: files/vpn1
-          SOURCE2_FILE: files/vpn2
+          VPN1_FILE: files/vpn1
+          VPN2_FILE: files/vpn2
           OUTPUT_FILE: files/external_sub
         run: |
           python3 merge_subscriptions.py
@@ -118,76 +75,70 @@ jobs:
           ) as f:
               data = json.load(f)
 
-          profiles = (
-              data
-              if isinstance(data, list)
-              else [data]
-          )
-
-          total_vpn1 = 0
-          total_vpn2 = 0
-
-          for profile in profiles:
-
-              for outbound in profile.get(
-                  "outbounds",
-                  []
-              ):
-
-                  if not isinstance(
-                      outbound,
-                      dict
-                  ):
-                      continue
-
-                  tag = str(
-                      outbound.get(
-                          "tag",
-                          ""
-                      )
-                  )
-
-                  if tag.startswith(
-                      "VPN1 | "
-                  ):
-                      total_vpn1 += 1
-
-                  elif tag.startswith(
-                      "proxy-"
-                  ):
-                      total_vpn2 += 1
-
-          print(
-              f"Profiles: {len(profiles)}"
-          )
-
-          print(
-              f"VPN1 nodes: {total_vpn1}"
-          )
-
-          print(
-              f"VPN2 nodes: {total_vpn2}"
-          )
-
-          if total_vpn1 == 0:
+          if not isinstance(data, list):
               print(
-                  "ERROR: "
-                  "VPN1 nodes were not added",
+                  "ERROR: итоговый файл "
+                  "не является массивом профилей"
+              )
+              sys.exit(1)
+
+          vpn1 = []
+          vpn2 = []
+
+          for profile in data:
+              if not isinstance(profile, dict):
+                  continue
+
+              remarks = str(
+                  profile.get("remarks", "")
+              )
+
+              if remarks.startswith("VPN1 | "):
+                  vpn1.append(remarks)
+
+              elif remarks.startswith("VPN2 | "):
+                  vpn2.append(remarks)
+
+          print(
+              f"Total profiles: {len(data)}"
+          )
+
+          print(
+              f"VPN1 profiles: {len(vpn1)}"
+          )
+
+          print(
+              f"VPN2 profiles: {len(vpn2)}"
+          )
+
+          print()
+          print("First VPN1 profiles:")
+
+          for name in vpn1[:5]:
+              print(f"  {name}")
+
+          print()
+          print("First VPN2 profiles:")
+
+          for name in vpn2[:5]:
+              print(f"  {name}")
+
+          if not vpn1:
+              print(
+                  "ERROR: VPN1 profiles not found",
                   file=sys.stderr
               )
               sys.exit(1)
 
-          if total_vpn2 == 0:
+          if not vpn2:
               print(
-                  "ERROR: "
-                  "VPN2 nodes were not found",
+                  "ERROR: VPN2 profiles not found",
                   file=sys.stderr
               )
               sys.exit(1)
 
-          print(
-              "Validation OK"
-          )
+          print()
+          print("Validation OK")
           PY
 
       - name: Update release with subscription
@@ -196,7 +147,7 @@ jobs:
           tag_name: happ-sub
           name: Latest Happ Subscription
           body: |
-            Автоматически обновляемая подписка.
+            Автоматически обновляемая объединённая подписка.
           files: |
             files/external_sub
           overwrite_files: true

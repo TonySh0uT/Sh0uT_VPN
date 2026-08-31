@@ -3,22 +3,17 @@ import json
 import os
 import re
 import sys
-from copy import deepcopy
-from urllib.parse import parse_qs, unquote
 
 
-def decode_base64(data: str) -> str:
-    """
-    Decode Base64 subscription safely.
+def load_json_file(path: str):
+    with open(path, "r", encoding="utf-8") as f:
+        return json.load(f)
 
-    The response is expected to contain Base64 text.
-    We only remove whitespace and UTF-8 BOM.
-    """
 
+def decode_base64_to_text(data: str) -> str:
     data = data.strip()
     data = data.lstrip("\ufeff")
 
-    # Remove only normal whitespace.
     data = re.sub(r"\s+", "", data)
 
     try:
@@ -26,503 +21,102 @@ def decode_base64(data: str) -> str:
             data,
             validate=True
         )
+        return decoded.decode("utf-8")
+
     except Exception as exc:
         raise RuntimeError(
-            f"VPN1: некорректный Base64: {exc}"
+            f"Не удалось декодировать Base64: {exc}"
         )
 
-    # We expect UTF-8 text containing VLESS URIs.
-    try:
-        text = decoded.decode("utf-8")
-    except UnicodeDecodeError as exc:
-        # Print first bytes in hex for diagnostics.
-        preview = decoded[:32].hex(" ")
 
+def load_profiles(path: str):
+    """
+    Load subscription in either:
+    - JSON object
+    - JSON array
+    - Base64 encoded JSON
+    """
+
+    with open(path, "r", encoding="utf-8") as f:
+        raw = f.read().strip()
+
+    if not raw:
         raise RuntimeError(
-            "VPN1: Base64 успешно декодирован, "
-            "но результат не является UTF-8 текстом. "
-            f"Первые байты: {preview}. "
-            f"Ошибка: {exc}"
+            f"Файл {path} пустой"
         )
 
-    return text
+    # -------------------------
+    # Try plain JSON first.
+    # -------------------------
 
+    try:
+        data = json.loads(raw)
 
-def parse_vless_uri(uri: str, index: int) -> dict:
-    """
-    Convert a VLESS URI into an Xray outbound.
-    """
+        if isinstance(data, list):
+            return data
 
-    raw = uri[len("vless://"):]
+        if isinstance(data, dict):
+            return [data]
 
-    # Server name after #
-    if "#" in raw:
-        raw, fragment = raw.split("#", 1)
-        name = unquote(fragment)
-    else:
-        name = f"Server {index}"
+    except json.JSONDecodeError:
+        pass
 
-    # Query parameters
-    if "?" in raw:
-        address_part, query_string = raw.split("?", 1)
-    else:
-        address_part = raw
-        query_string = ""
+    # -------------------------
+    # Try Base64.
+    # -------------------------
 
-    if "@" not in address_part:
-        raise ValueError(
-            f"Некорректный VLESS URI: {uri}"
+    try:
+        decoded = decode_base64_to_text(raw)
+
+        data = json.loads(decoded)
+
+        if isinstance(data, list):
+            return data
+
+        if isinstance(data, dict):
+            return [data]
+
+    except Exception as exc:
+        raise RuntimeError(
+            f"Не удалось распознать подписку "
+            f"{path}: {exc}"
         )
 
-    user_uuid, server = address_part.split("@", 1)
-
-    # IPv6
-    if server.startswith("["):
-        match = re.match(
-            r"^\[(.+)]:(\d+)$",
-            server
-        )
-
-        if not match:
-            raise ValueError(
-                f"Некорректный IPv6 адрес: {server}"
-            )
-
-        address = match.group(1)
-        port = int(match.group(2))
-
-    else:
-        address, port = server.rsplit(":", 1)
-        port = int(port)
-
-    params = parse_qs(
-        query_string,
-        keep_blank_values=True
+    raise RuntimeError(
+        f"Неизвестный формат подписки: {path}"
     )
 
-    def get(name, default=None):
-        values = params.get(name)
-        return values[0] if values else default
 
-    network = get(
-        "type",
-        get("network", "tcp")
-    )
-
-    security = get(
-        "security",
-        "none"
-    )
-
-    outbound = {
-        "tag": f"VPN1 | {name}",
-        "protocol": "vless",
-        "settings": {
-            "vnext": [
-                {
-                    "address": address,
-                    "port": port,
-                    "users": [
-                        {
-                            "id": user_uuid,
-                            "encryption": get(
-                                "encryption",
-                                "none"
-                            ),
-                            "flow": get(
-                                "flow",
-                                ""
-                            )
-                        }
-                    ]
-                }
-            ]
-        },
-        "streamSettings": {
-            "network": network
-        }
-    }
-
-    stream = outbound["streamSettings"]
-
-    # -------------------------
-    # WebSocket
-    # -------------------------
-
-    if network == "ws":
-        ws_settings = {}
-
-        path = get("path")
-        host = get("host")
-
-        if path:
-            ws_settings["path"] = path
-
-        if host:
-            ws_settings["headers"] = {
-                "Host": host
-            }
-
-        stream["wsSettings"] = ws_settings
-
-    # -------------------------
-    # TCP
-    # -------------------------
-
-    elif network == "tcp":
-        header_type = get(
-            "headerType"
-        )
-
-        if header_type:
-            stream["tcpSettings"] = {
-                "header": {
-                    "type": header_type
-                }
-            }
-
-    # -------------------------
-    # gRPC
-    # -------------------------
-
-    elif network == "grpc":
-        grpc_settings = {}
-
-        service_name = get(
-            "serviceName"
-        )
-
-        if service_name:
-            grpc_settings[
-                "serviceName"
-            ] = service_name
-
-        stream[
-            "grpcSettings"
-        ] = grpc_settings
-
-    # -------------------------
-    # HTTP
-    # -------------------------
-
-    elif network == "http":
-        http_settings = {}
-
-        path = get("path")
-        host = get("host")
-
-        if path:
-            http_settings["path"] = path
-
-        if host:
-            http_settings["host"] = [
-                host
-            ]
-
-        stream[
-            "httpSettings"
-        ] = http_settings
-
-    # -------------------------
-    # HTTP Upgrade
-    # -------------------------
-
-    elif network == "httpupgrade":
-        settings = {}
-
-        path = get("path")
-        host = get("host")
-
-        if path:
-            settings["path"] = path
-
-        if host:
-            settings["host"] = host
-
-        stream[
-            "httpupgradeSettings"
-        ] = settings
-
-    # -------------------------
-    # XHTTP
-    # -------------------------
-
-    elif network == "xhttp":
-        settings = {}
-
-        path = get("path")
-        host = get("host")
-        mode = get("mode")
-
-        if path:
-            settings["path"] = path
-
-        if host:
-            settings["host"] = host
-
-        if mode:
-            settings["mode"] = mode
-
-        stream[
-            "xhttpSettings"
-        ] = settings
-
-    # -------------------------
-    # TLS
-    # -------------------------
-
-    if security == "tls":
-        tls_settings = {}
-
-        sni = get("sni")
-        fingerprint = get("fp")
-        alpn = get("alpn")
-
-        if sni:
-            tls_settings[
-                "serverName"
-            ] = sni
-
-        if fingerprint:
-            tls_settings[
-                "fingerprint"
-            ] = fingerprint
-
-        if alpn:
-            tls_settings["alpn"] = (
-                alpn.split(",")
-            )
-
-        stream["security"] = "tls"
-        stream["tlsSettings"] = (
-            tls_settings
-        )
-
-    # -------------------------
-    # REALITY
-    # -------------------------
-
-    elif security == "reality":
-        reality_settings = {
-            "show": False
-        }
-
-        sni = get("sni")
-        fingerprint = get("fp")
-        public_key = get("pbk")
-        short_id = get("sid")
-
-        if sni:
-            reality_settings[
-                "serverName"
-            ] = sni
-
-        if fingerprint:
-            reality_settings[
-                "fingerprint"
-            ] = fingerprint
-
-        if public_key:
-            reality_settings[
-                "publicKey"
-            ] = public_key
-
-        if short_id:
-            reality_settings[
-                "shortId"
-            ] = short_id
-
-        stream["security"] = "reality"
-        stream[
-            "realitySettings"
-        ] = reality_settings
-
-    return outbound
-
-
-def parse_vpn1(raw: str) -> list[dict]:
-    """Read VPN1 Base64 subscription."""
-
-    decoded = decode_base64(raw)
-
-    result = []
-
-    for line in decoded.splitlines():
-
-        line = line.strip()
-
-        if not line:
-            continue
-
-        if not line.lower().startswith(
-            "vless://"
-        ):
-            continue
-
-        try:
-
-            outbound = parse_vless_uri(
-                line,
-                len(result) + 1
-            )
-
-            result.append(outbound)
-
-        except Exception as exc:
-
-            print(
-                f"WARNING: VPN1: "
-                f"не удалось разобрать URI: "
-                f"{exc}",
-                file=sys.stderr
-            )
-
-    return result
-
-
-def add_vpn1_to_profile(
+def add_source_to_remarks(
     profile: dict,
-    vpn1_outbounds: list[dict]
-) -> int:
+    source: str
+):
+    """
+    Prefix profile remarks with VPN1/VPN2.
+    """
 
-    outbounds = profile.get(
-        "outbounds"
+    old_remarks = profile.get(
+        "remarks",
+        ""
     )
 
-    if not isinstance(
-        outbounds,
-        list
-    ):
-        return 0
-
-    existing_tags = {
-        item.get("tag")
-        for item in outbounds
-        if isinstance(item, dict)
-    }
-
-    added = 0
-
-    for outbound in vpn1_outbounds:
-
-        new_outbound = deepcopy(
-            outbound
+    if old_remarks:
+        profile["remarks"] = (
+            f"{source} | {old_remarks}"
         )
-
-        tag = new_outbound.get(
-            "tag"
-        )
-
-        if not tag:
-            continue
-
-        if tag in existing_tags:
-            continue
-
-        # Insert before technical outbounds.
-        insert_position = len(
-            outbounds
-        )
-
-        for i, existing in enumerate(
-            outbounds
-        ):
-
-            if not isinstance(
-                existing,
-                dict
-            ):
-                continue
-
-            existing_tag = existing.get(
-                "tag"
-            )
-
-            if existing_tag in {
-                "block",
-                "direct",
-                "direct-fragment"
-            }:
-                insert_position = i
-                break
-
-        outbounds.insert(
-            insert_position,
-            new_outbound
-        )
-
-        existing_tags.add(tag)
-        added += 1
-
-    # ----------------------------------
-    # Add VPN1 prefix to existing
-    # Balancer.
-    # ----------------------------------
-
-    routing = profile.get(
-        "routing"
-    )
-
-    if not isinstance(
-        routing,
-        dict
-    ):
-        return added
-
-    balancers = routing.get(
-        "balancers"
-    )
-
-    if not isinstance(
-        balancers,
-        list
-    ):
-        return added
-
-    for balancer in balancers:
-
-        if not isinstance(
-            balancer,
-            dict
-        ):
-            continue
-
-        if balancer.get(
-            "tag"
-        ) != "Balancer":
-            continue
-
-        selectors = balancer.setdefault(
-            "selector",
-            []
-        )
-
-        if not isinstance(
-            selectors,
-            list
-        ):
-            selectors = []
-            balancer["selector"] = (
-                selectors
-            )
-
-        if "VPN1 | " not in selectors:
-            selectors.append(
-                "VPN1 | "
-            )
-
-    return added
+    else:
+        profile["remarks"] = source
 
 
 def main():
 
-    source1_file = os.environ.get(
-        "SOURCE1_FILE",
+    vpn1_file = os.environ.get(
+        "VPN1_FILE",
         "files/vpn1"
     )
 
-    source2_file = os.environ.get(
-        "SOURCE2_FILE",
+    vpn2_file = os.environ.get(
+        "VPN2_FILE",
         "files/vpn2"
     )
 
@@ -535,114 +129,74 @@ def main():
     # Load VPN1
     # -------------------------
 
-    with open(
-        source1_file,
-        "r",
-        encoding="utf-8"
-    ) as f:
-
-        vpn1_raw = f.read()
-
-    vpn1_outbounds = parse_vpn1(
-        vpn1_raw
+    vpn1_profiles = load_profiles(
+        vpn1_file
     )
 
-    if not vpn1_outbounds:
+    if not vpn1_profiles:
         raise RuntimeError(
-            "VPN1 не содержит VLESS-серверов"
+            "VPN1 не содержит профилей"
         )
 
     print(
         f"VPN1: найдено "
-        f"{len(vpn1_outbounds)} серверов"
+        f"{len(vpn1_profiles)} профилей"
     )
 
     # -------------------------
     # Load VPN2
     # -------------------------
 
-    with open(
-        source2_file,
-        "r",
-        encoding="utf-8"
-    ) as f:
+    vpn2_profiles = load_profiles(
+        vpn2_file
+    )
 
-        vpn2_raw = f.read()
-
-    try:
-        vpn2 = json.loads(
-            vpn2_raw
-        )
-    except json.JSONDecodeError as exc:
+    if not vpn2_profiles:
         raise RuntimeError(
-            f"VPN2 содержит "
-            f"некорректный JSON: {exc}"
+            "VPN2 не содержит профилей"
         )
 
-    if isinstance(
-        vpn2,
-        list
-    ):
-        profiles = vpn2
-        was_list = True
-
-    elif isinstance(
-        vpn2,
-        dict
-    ):
-        profiles = [vpn2]
-        was_list = False
-
-    else:
-        raise RuntimeError(
-            "Корень VPN2 должен "
-            "быть JSON object или array"
-        )
+    print(
+        f"VPN2: найдено "
+        f"{len(vpn2_profiles)} профилей"
+    )
 
     # -------------------------
-    # Merge
+    # Add source names
     # -------------------------
 
-    total_added = 0
+    for profile in vpn1_profiles:
 
-    for index, profile in enumerate(
-        profiles,
-        start=1
-    ):
-
-        if not isinstance(
-            profile,
-            dict
-        ):
+        if not isinstance(profile, dict):
             continue
 
-        added = add_vpn1_to_profile(
+        add_source_to_remarks(
             profile,
-            vpn1_outbounds
+            "VPN1"
         )
 
-        total_added += added
+    for profile in vpn2_profiles:
 
-        print(
-            f"Профиль #{index}: "
-            f"добавлено {added} "
-            f"серверов VPN1"
-        )
+        if not isinstance(profile, dict):
+            continue
 
-    if total_added == 0:
-        raise RuntimeError(
-            "Не удалось добавить "
-            "серверы VPN1"
+        add_source_to_remarks(
+            profile,
+            "VPN2"
         )
 
     # -------------------------
-    # Preserve original root type
+    # Merge profiles
     # -------------------------
 
-    result = (
-        profiles
-        if was_list
-        else profiles[0]
+    merged = (
+        vpn1_profiles +
+        vpn2_profiles
+    )
+
+    print(
+        f"Итого профилей: "
+        f"{len(merged)}"
     )
 
     # -------------------------
@@ -657,7 +211,7 @@ def main():
     ) as f:
 
         json.dump(
-            result,
+            merged,
             f,
             ensure_ascii=False,
             separators=(",", ":")
@@ -665,12 +219,6 @@ def main():
 
     print(
         f"Готово: {output_file}"
-    )
-
-    print(
-        f"Всего добавлено "
-        f"VPN1 серверов: "
-        f"{total_added}"
     )
 
 
