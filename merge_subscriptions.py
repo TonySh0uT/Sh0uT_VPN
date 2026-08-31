@@ -9,55 +9,43 @@ from urllib.parse import parse_qs, unquote
 
 def decode_base64(data: str) -> str:
     """
-    Decode standard or URL-safe Base64.
+    Decode Base64 subscription safely.
 
-    The source may contain:
-    - spaces/newlines
-    - BOM
-    - accidental Unicode characters
+    The response is expected to contain Base64 text.
+    We only remove whitespace and UTF-8 BOM.
     """
 
-    # Remove all whitespace.
-    data = re.sub(r"\s+", "", data.strip())
+    data = data.strip()
+    data = data.lstrip("\ufeff")
 
-    # Base64 itself may contain only ASCII characters.
-    # Remove anything that cannot belong to Base64.
-    data = re.sub(
-        r"[^A-Za-z0-9+/=_-]",
-        "",
-        data
-    )
-
-    # Try standard Base64.
-    padding = "=" * (-len(data) % 4)
+    # Remove only normal whitespace.
+    data = re.sub(r"\s+", "", data)
 
     try:
         decoded = base64.b64decode(
-            data + padding,
-            validate=False
+            data,
+            validate=True
         )
-
-        return decoded.decode(
-            "utf-8"
-        )
-
-    except Exception:
-        pass
-
-    # Try URL-safe Base64.
-    try:
-        decoded = base64.urlsafe_b64decode(
-            data + padding
-        )
-
-        return decoded.decode(
-            "utf-8"
-        )
-
     except Exception as exc:
         raise RuntimeError(
-            f"Не удалось декодировать VPN1: {exc}"
+            f"VPN1: некорректный Base64: {exc}"
         )
+
+    # We expect UTF-8 text containing VLESS URIs.
+    try:
+        text = decoded.decode("utf-8")
+    except UnicodeDecodeError as exc:
+        # Print first bytes in hex for diagnostics.
+        preview = decoded[:32].hex(" ")
+
+        raise RuntimeError(
+            "VPN1: Base64 успешно декодирован, "
+            "но результат не является UTF-8 текстом. "
+            f"Первые байты: {preview}. "
+            f"Ошибка: {exc}"
+        )
+
+    return text
 
 
 def parse_vless_uri(uri: str, index: int) -> dict:
