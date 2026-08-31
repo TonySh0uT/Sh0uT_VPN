@@ -35,7 +35,7 @@ jobs:
             -H "x-device-locale: RU" \
             -H "x-app-version: 3.3.6" \
             -H "user-agent: Happ/3.3.6/Windows/21111111111" \
-            -o files/vpn1
+            -o files/vpn2
 
       - name: Download VPN2
         run: |
@@ -52,7 +52,7 @@ jobs:
             -H "x-device-locale: RU" \
             -H "x-app-version: 3.3.6" \
             -H "user-agent: Happ/3.3.6/Windows/21111111111" \
-            -o files/vpn2
+            -o files/vpn1
 
       - name: Debug VPN1 file
         run: |
