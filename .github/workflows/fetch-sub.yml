@@ -54,6 +54,49 @@ jobs:
             -H "user-agent: Happ/3.3.6/Windows/21111111111" \
             -o files/vpn2
 
+      - name: Debug VPN1 file
+        run: |
+          echo "=== FILE INFO ==="
+          wc -c files/vpn1
+          file files/vpn1
+
+          echo
+          echo "=== FIRST 100 BYTES ==="
+          xxd -l 100 files/vpn1
+
+          echo
+          echo "=== BYTES AROUND POSITION 64768 ==="
+          dd if=files/vpn1 bs=1 skip=64740 count=80 2>/dev/null | xxd
+
+          echo
+          echo "=== PYTHON CHARACTER INFO ==="
+          python3 - <<'PY'
+          from pathlib import Path
+
+          data = Path("files/vpn1").read_text(
+              encoding="utf-8"
+          )
+
+          start = 64740
+          end = 64810
+
+          print(f"Length: {len(data)}")
+          print(f"Characters [{start}:{end}]:")
+          print(repr(data[start:end]))
+
+          print()
+          print("Unicode code points:")
+
+          for i, char in enumerate(
+              data[start:end],
+              start=start
+          ):
+              print(
+                  f"{i}: "
+                  f"{char!r} "
+                  f"U+{ord(char):04X}"
+              )
+          PY
       - name: Merge subscriptions
         env:
           SOURCE1_FILE: files/vpn1
