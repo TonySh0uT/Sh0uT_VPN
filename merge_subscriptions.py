@@ -566,6 +566,23 @@ def prefix_vpn1(profile: dict):
         else "VPN1"
     )
 
+def prefix_vpn3(profile: dict):
+    """
+    Add VPN3 prefix only to profile name.
+    Everything else remains untouched.
+    """
+
+    old_name = profile.get(
+        "remarks",
+        ""
+    )
+
+    profile["remarks"] = (
+        f"VPN3 | {old_name}"
+        if old_name
+        else "VPN3"
+    )
+
 
 def main():
 
@@ -663,30 +680,50 @@ def main():
     )
 
     # =========================
-    # VPN3
+    # VPN3 (формат как у VPN1)
     # =========================
 
-    with open(
-        vpn3_file,
-        "r",
-        encoding="utf-8"
-    ) as f:
-
-        vpn3_raw = f.read()
-
-    vpn3_servers = parse_vpn2(
-        vpn3_raw
+    vpn3 = load_json(
+        vpn3_file
     )
 
-    if not vpn3_servers:
+    if not isinstance(
+        vpn3,
+        list
+    ):
+        vpn3 = [vpn3]
+
+    if not vpn3:
         raise RuntimeError(
-            "VPN3 не содержит VLESS серверов"
+            "VPN3 не содержит профилей"
         )
 
     print(
         f"VPN3: найдено "
-        f"{len(vpn3_servers)} серверов"
+        f"{len(vpn3)} профилей"
     )
+
+    vpn3_profiles = []
+
+    for profile in vpn3:
+
+        if not isinstance(
+            profile,
+            dict
+        ):
+            continue
+
+        profile = deepcopy(
+            profile
+        )
+
+        prefix_vpn3(
+            profile
+        )
+
+        vpn3_profiles.append(
+            profile
+        )
 
     # =========================
     # VPN2 / VPN3 profiles
@@ -716,34 +753,6 @@ def main():
     print(
         f"VPN2: создано "
         f"{len(vpn2_profiles)} профилей"
-    )
-
-    vpn3_profiles = []
-
-    for index, server in enumerate(
-        vpn3_servers,
-        start=1
-    ):
-
-        profile = create_vpn2_profile(
-            template,
-            server,
-            index
-        )
-
-        # Единственное отличие — префикс VPN3.
-        profile["remarks"] = (
-            profile["remarks"]
-            .replace("VPN2 | ", "VPN3 | ", 1)
-        )
-
-        vpn3_profiles.append(
-            profile
-        )
-
-    print(
-        f"VPN3: создано "
-        f"{len(vpn3_profiles)} профилей"
     )
 
     # =========================
