@@ -54,10 +54,28 @@ jobs:
             -H "user-agent: Happ/3.3.6/Windows/21111111111" \
             -o files/vpn2
 
+      - name: Download VPN3
+        run: |
+          curl -fL --compressed \
+            -c files/cookies3.txt \
+            -b files/cookies3.txt \
+            "${{ secrets.VPN_SUB_URL_3 }}" \
+            -H "accept-language: ru-RU,en,*" \
+            -H "accept-encoding: gzip, deflate" \
+            -H "x-ver-os: 11_10.0.26200" \
+            -H "x-hwid: ${{ secrets.HAPP_HWID }}" \
+            -H "x-device-model: DESKTOP" \
+            -H "x-device-os: Windows" \
+            -H "x-device-locale: RU" \
+            -H "x-app-version: 3.3.6" \
+            -H "user-agent: Happ/3.3.6/Windows/21111111111" \
+            -o files/vpn3
+
       - name: Merge subscriptions
         env:
           VPN1_FILE: files/vpn1
           VPN2_FILE: files/vpn2
+          VPN3_FILE: files/vpn3
           OUTPUT_FILE: files/external_sub
         run: |
           python3 merge_subscriptions.py
@@ -84,6 +102,7 @@ jobs:
 
           vpn1 = []
           vpn2 = []
+          vpn3 = []
 
           for profile in data:
               if not isinstance(profile, dict):
@@ -99,6 +118,9 @@ jobs:
               elif remarks.startswith("VPN2 | "):
                   vpn2.append(remarks)
 
+              elif remarks.startswith("VPN3 | "):
+                  vpn3.append(remarks)
+
           print(
               f"Total profiles: {len(data)}"
           )
@@ -109,6 +131,10 @@ jobs:
 
           print(
               f"VPN2 profiles: {len(vpn2)}"
+          )
+
+          print(
+              f"VPN3 profiles: {len(vpn3)}"
           )
 
           print()
@@ -123,6 +149,12 @@ jobs:
           for name in vpn2[:5]:
               print(f"  {name}")
 
+          print()
+          print("First VPN3 profiles:")
+
+          for name in vpn3[:5]:
+              print(f"  {name}")
+
           if not vpn1:
               print(
                   "ERROR: VPN1 profiles not found",
@@ -133,6 +165,13 @@ jobs:
           if not vpn2:
               print(
                   "ERROR: VPN2 profiles not found",
+                  file=sys.stderr
+              )
+              sys.exit(1)
+
+          if not vpn3:
+              print(
+                  "ERROR: VPN3 profiles not found",
                   file=sys.stderr
               )
               sys.exit(1)
