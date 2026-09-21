@@ -539,6 +539,11 @@ def main():
         "files/vpn2"
     )
 
+    vpn3_file = os.environ.get(
+        "VPN3_FILE",
+        "files/vpn3"
+    )
+
     output_file = os.environ.get(
         "OUTPUT_FILE",
         "files/external_sub"
@@ -618,7 +623,33 @@ def main():
     )
 
     # =========================
-    # VPN2 profiles
+    # VPN3
+    # =========================
+
+    with open(
+        vpn3_file,
+        "r",
+        encoding="utf-8"
+    ) as f:
+
+        vpn3_raw = f.read()
+
+    vpn3_servers = parse_vpn2(
+        vpn3_raw
+    )
+
+    if not vpn3_servers:
+        raise RuntimeError(
+            "VPN3 не содержит VLESS серверов"
+        )
+
+    print(
+        f"VPN3: найдено "
+        f"{len(vpn3_servers)} серверов"
+    )
+
+    # =========================
+    # VPN2 / VPN3 profiles
     # =========================
 
     # Use first VPN1 profile as
@@ -647,13 +678,42 @@ def main():
         f"{len(vpn2_profiles)} профилей"
     )
 
+    vpn3_profiles = []
+
+    for index, server in enumerate(
+        vpn3_servers,
+        start=1
+    ):
+
+        profile = create_vpn2_profile(
+            template,
+            server,
+            index
+        )
+
+        # Единственное отличие — префикс VPN3.
+        profile["remarks"] = (
+            profile["remarks"]
+            .replace("VPN2 | ", "VPN3 | ", 1)
+        )
+
+        vpn3_profiles.append(
+            profile
+        )
+
+    print(
+        f"VPN3: создано "
+        f"{len(vpn3_profiles)} профилей"
+    )
+
     # =========================
     # Merge
     # =========================
 
     merged = (
         vpn1_profiles +
-        vpn2_profiles
+        vpn2_profiles +
+        vpn3_profiles
     )
 
     print(
