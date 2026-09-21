@@ -15,7 +15,9 @@ def load_json(path: str):
 def decode_base64(data: str) -> str:
     data = data.strip()
     data = data.lstrip("\ufeff")
-    data = re.sub(r"\s+", "", data)
+    # Убираем всё, что не входит в base64-алфавит
+    # (в т.ч. случайную кириллицу из HTML-страниц).
+    data = re.sub(r"[^A-Za-z0-9+/=]", "", data)
 
     padding = "=" * (-len(data) % 4)
 
@@ -319,14 +321,52 @@ def parse_vless_uri(uri: str, index: int) -> dict:
 
 def parse_vpn2(raw: str) -> list[dict]:
     """
-    VPN2 is Base64 containing one VLESS URI per line.
+    VPN2/VPN3: либо Base64 со списком URI,
+    либо plain text со списком URI.
     """
 
-    decoded = decode_base64(raw)
+    text = raw
+
+    # Если в тексте уже встречается vless:// —
+    # это уже готовый plain-список.
+    if "vless://" not in text.lower():
+
+        # Иначе пробуем декодировать base64.
+        try:
+            text = decode_base64(raw)
+
+        except RuntimeError as exc:
+
+            # Фолбэк: возможно, сервер отдал HTML
+            # (например, DDoS-Guard challenge).
+            # Попробуем вытащить vless:// регэкспом.
+            matches = re.findall(
+                r"vless://[^\s\"'<>]+",
+                raw
+            )
+
+            if matches:
+                text = "\n".join(matches)
+
+            else:
+                print(
+                    "WARNING: не удалось декодировать "
+                    f"контент как Base64: {exc}",
+                    file=sys.stderr
+                )
+                print(
+                    "WARNING: первые 500 символов ответа:",
+                    file=sys.stderr
+                )
+                print(
+                    raw[:500],
+                    file=sys.stderr
+                )
+                return []
 
     result = []
 
-    for line in decoded.splitlines():
+    for line in text.splitlines():
 
         line = line.strip()
 
@@ -351,7 +391,7 @@ def parse_vpn2(raw: str) -> list[dict]:
 
             print(
                 f"WARNING: "
-                f"не удалось разобрать VPN2 URI: "
+                f"не удалось разобрать URI: "
                 f"{exc}",
                 file=sys.stderr
             )
