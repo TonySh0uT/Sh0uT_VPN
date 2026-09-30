@@ -19,11 +19,11 @@ jobs:
           mkdir files
 
           curl -fL \
-            https://connect.vpnhub.shop/geo/geoip.dat \
+            https://connect.vphub.me/geo/geoip.dat \
             -o files/geoip.dat
 
           curl -fL \
-            https://connect.vpnhub.shop/geo/geosite.dat \
+            https://connect.vphub.me/geo/geosite.dat \
             -o files/geosite.dat
 
 
