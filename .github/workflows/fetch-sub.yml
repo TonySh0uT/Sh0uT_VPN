@@ -28,13 +28,13 @@ jobs:
             "${{ secrets.VPN_SUB_URL }}" \
             -H "accept-language: ru-RU,en,*" \
             -H "accept-encoding: gzip, deflate" \
-            -H "x-ver-os: 11_10.0.26200" \
+            -H "x-ver-os:  ${{ secrets.HAPP_X_VER_OS }}" \
             -H "x-hwid: ${{ secrets.HAPP_HWID }}" \
-            -H "x-device-model: DESKTOP" \
+            -H "x-device-model:  ${{ secrets.HAPP_X_DEVICE_MODEL }}" \
             -H "x-device-os: Windows" \
             -H "x-device-locale: RU" \
-            -H "x-app-version: 3.3.6" \
-            -H "user-agent: Happ/3.3.6/Windows/21111111111" \
+            -H "x-app-version:  ${{ secrets.HAPP_X_APP_VERSION }}" \
+            -H "user-agent:  ${{ secrets.HAPP_USER_AGENT }}" \
             -o files/vpn1
 
       - name: Download VPN2
@@ -45,13 +45,13 @@ jobs:
             "${{ secrets.VPN_SUB_URL_2 }}" \
             -H "accept-language: ru-RU,en,*" \
             -H "accept-encoding: gzip, deflate" \
-            -H "x-ver-os: 11_10.0.26200" \
+            -H "x-ver-os:  ${{ secrets.HAPP_X_VER_OS }}" \
             -H "x-hwid: ${{ secrets.HAPP_HWID }}" \
-            -H "x-device-model: DESKTOP" \
+            -H "x-device-model:  ${{ secrets.HAPP_X_DEVICE_MODEL }}" \
             -H "x-device-os: Windows" \
             -H "x-device-locale: RU" \
-            -H "x-app-version: 3.3.6" \
-            -H "user-agent: Happ/3.3.6/Windows/21111111111" \
+            -H "x-app-version:  ${{ secrets.HAPP_X_APP_VERSION }}" \
+            -H "user-agent:  ${{ secrets.HAPP_USER_AGENT }}" \
             -o files/vpn2
 
       - name: Download VPN3
@@ -62,13 +62,13 @@ jobs:
             "${{ secrets.VPN_SUB_URL_3 }}" \
             -H "accept-language: ru-RU,en,*" \
             -H "accept-encoding: gzip, deflate" \
-            -H "x-ver-os: 11_10.0.26200" \
+            -H "x-ver-os:  ${{ secrets.HAPP_X_VER_OS }}" \
             -H "x-hwid: ${{ secrets.HAPP_HWID }}" \
-            -H "x-device-model: DESKTOP" \
+            -H "x-device-model:  ${{ secrets.HAPP_X_DEVICE_MODEL }}" \
             -H "x-device-os: Windows" \
             -H "x-device-locale: RU" \
-            -H "x-app-version: 3.3.6" \
-            -H "user-agent: Happ/3.3.6/Windows/21111111111" \
+            -H "x-app-version:  ${{ secrets.HAPP_X_APP_VERSION }}" \
+            -H "user-agent:  ${{ secrets.HAPP_USER_AGENT }}" \
             -o files/vpn3
 
       - name: Merge subscriptions
